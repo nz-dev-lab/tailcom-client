@@ -26,20 +26,9 @@ function computeRms(samples) {
 // Uses arecord on Linux, sox on Windows.
 // Returns a stop function.
 function startMicCapture(source, isMuted = () => false, onLevel) {
-    const recorderBin = process.platform === 'win32' ? 'rec' : 'arecord';
-    console.log(`[tailcom:audio] startMicCapture — recorder=${recorderBin} rate=${SAMPLE_RATE} ch=${CHANNELS}`);
-    const recorder = record.record({
-        sampleRate: SAMPLE_RATE,
-        channels: CHANNELS,
-        audioType: 'raw',
-        recorder: recorderBin,
-        verbose: process.platform === 'win32',
-        silence: 0,
-    });
     let overflow = Buffer.alloc(0);
     let frameCount = 0;
-    const stream = recorder.stream();
-    stream.on('data', (chunk) => {
+    function handleChunk(chunk) {
         frameCount++;
         if (frameCount === 1)
             console.log('[tailcom:audio] mic stream receiving data — first frame OK');
@@ -54,20 +43,49 @@ function startMicCapture(source, isMuted = () => false, onLevel) {
                 samples[i] = frame.readInt16LE(i * 2);
             }
             if (!isMuted()) {
-                source.onData({
-                    samples,
-                    sampleRate: SAMPLE_RATE,
-                    bitsPerSample: BIT_DEPTH,
-                    channelCount: CHANNELS,
-                    numberOfFrames: FRAME_SAMPLES,
-                });
+                source.onData({ samples, sampleRate: SAMPLE_RATE, bitsPerSample: BIT_DEPTH, channelCount: CHANNELS, numberOfFrames: FRAME_SAMPLES });
             }
-            // Level metering — every 10 frames ≈ 100 ms (independent of mute)
-            if (onLevel && frameCount % 10 === 0) {
+            if (onLevel && frameCount % 10 === 0)
                 onLevel(computeRms(samples));
-            }
         }
+    }
+    if (process.platform === 'win32') {
+        // Bypass node-record-lpcm16 on Windows — spawn sox directly with waveaudio input
+        console.log(`[tailcom:audio] startMicCapture — recorder=sox(waveaudio) rate=${SAMPLE_RATE} ch=${CHANNELS}`);
+        const proc = (0, child_process_1.spawn)('sox', [
+            '-t', 'waveaudio', 'default',
+            '-r', String(SAMPLE_RATE),
+            '-c', String(CHANNELS),
+            '-e', 'signed-integer',
+            '-b', String(BIT_DEPTH),
+            '-t', 'raw', '-',
+        ], { stdio: ['ignore', 'pipe', 'pipe'] });
+        proc.on('error', (err) => console.error('[tailcom:audio] mic spawn error:', err.message));
+        proc.on('exit', (code) => { if (code !== null && code !== 0)
+            console.error(`[tailcom:audio] mic sox exited code ${code}`); });
+        proc.stderr?.on('data', (d) => console.error('[tailcom:audio] mic stderr:', d.toString().trim()));
+        proc.stdout?.on('data', handleChunk);
+        proc.stdout?.on('error', (err) => console.error('[tailcom:audio] mic stdout error:', err.message));
+        return () => {
+            console.log('[tailcom:audio] stopMicCapture called');
+            try {
+                proc.kill();
+            }
+            catch { /* ignore */ }
+        };
+    }
+    // Linux: use node-record-lpcm16 with arecord
+    console.log(`[tailcom:audio] startMicCapture — recorder=arecord rate=${SAMPLE_RATE} ch=${CHANNELS}`);
+    const recorder = record.record({
+        sampleRate: SAMPLE_RATE,
+        channels: CHANNELS,
+        audioType: 'raw',
+        recorder: 'arecord',
+        verbose: false,
+        silence: 0,
     });
+    const stream = recorder.stream();
+    stream.on('data', handleChunk);
     stream.on('error', (err) => {
         console.error('[tailcom:audio] mic stream error:', err?.message ?? String(err));
     });
