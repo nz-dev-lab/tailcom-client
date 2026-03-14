@@ -104,7 +104,7 @@ export function startMicCapture(
   })
 
   stream.on('error', (err: Error) => {
-    console.error('[tailcom:audio] mic stream error:', err.message)
+    console.error('[tailcom:audio] mic stream error:', err?.message ?? String(err))
   })
 
   return () => {
@@ -149,6 +149,9 @@ export function startSpeakerPlayback(sink: AudioSink, onLevel?: (rms: number) =>
   })
   player.on('exit', (code: number | null) => {
     if (code !== null && code !== 0) console.error(`[tailcom:audio] speaker player exited with code ${code}`)
+  })
+  player.stdin?.on('error', (err: Error) => {
+    console.error('[tailcom:audio] speaker stdin error (sox exited?):', err.message)
   })
 
   let speakerFrameCount = 0

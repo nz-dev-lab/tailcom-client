@@ -69,7 +69,7 @@ function startMicCapture(source, isMuted = () => false, onLevel) {
         }
     });
     stream.on('error', (err) => {
-        console.error('[tailcom:audio] mic stream error:', err.message);
+        console.error('[tailcom:audio] mic stream error:', err?.message ?? String(err));
     });
     return () => {
         console.log('[tailcom:audio] stopMicCapture called');
@@ -114,6 +114,9 @@ function startSpeakerPlayback(sink, onLevel) {
     player.on('exit', (code) => {
         if (code !== null && code !== 0)
             console.error(`[tailcom:audio] speaker player exited with code ${code}`);
+    });
+    player.stdin?.on('error', (err) => {
+        console.error('[tailcom:audio] speaker stdin error (sox exited?):', err.message);
     });
     let speakerFrameCount = 0;
     sink.ondata = (data) => {
