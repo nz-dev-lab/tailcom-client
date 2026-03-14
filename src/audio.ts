@@ -64,7 +64,7 @@ export function startMicCapture(
     channels: CHANNELS,
     audioType: 'raw',
     recorder: recorderBin,
-    verbose: false,
+    verbose: process.platform === 'win32',
     silence: 0,
   })
 
@@ -121,16 +121,17 @@ export function startSpeakerPlayback(sink: AudioSink, onLevel?: (rms: number) =>
   let player: ChildProcess | null = null
 
   if (process.platform === 'win32') {
-    // sox on Windows: read raw PCM from stdin, output to default sound device
+    // sox on Windows: -t waveaudio is required for Windows audio output
     player = spawn('sox', [
       '-t', 'raw',
       '-r', String(SAMPLE_RATE),
       '-e', 'signed-integer',
       '-b', String(BIT_DEPTH),
       '-c', String(CHANNELS),
-      '-',   // stdin
-      '-d',  // default audio device
-    ], { stdio: ['pipe', 'ignore', 'ignore'] })
+      '-',          // stdin
+      '-t', 'waveaudio',
+      'default',    // default audio device
+    ], { stdio: ['pipe', 'ignore', 'pipe'] })  // capture stderr for diagnostics
   } else {
     // aplay on Linux
     player = spawn('aplay', [
@@ -144,6 +145,9 @@ export function startSpeakerPlayback(sink: AudioSink, onLevel?: (rms: number) =>
 
   const playerBin = process.platform === 'win32' ? 'sox' : 'aplay'
   console.log(`[tailcom:audio] startSpeakerPlayback — player=${playerBin}`)
+  player.stderr?.on('data', (d: Buffer) => {
+    console.error('[tailcom:audio] speaker stderr:', d.toString().trim())
+  })
   player.on('error', (err: Error) => {
     console.error('[tailcom:audio] speaker player error:', err.message)
   })
