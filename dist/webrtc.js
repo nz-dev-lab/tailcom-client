@@ -16,7 +16,9 @@ class WebRTCHandler extends events_1.EventEmitter {
     }
     createPeerConnection() {
         console.log('[tailcom:webrtc] new RTCPeerConnection...');
-        const pc = new wrtc.RTCPeerConnection({ iceServers: [] });
+        const pc = new wrtc.RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        });
         console.log('[tailcom:webrtc] RTCPeerConnection OK');
         // Add a mic track so the remote side receives audio from us
         console.log('[tailcom:webrtc] new RTCAudioSource...');
@@ -27,10 +29,14 @@ class WebRTCHandler extends events_1.EventEmitter {
         console.log('[tailcom:webrtc] addTrack OK');
         pc.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log(`[tailcom:webrtc] ICE candidate — ${event.candidate.type} ${event.candidate.protocol} ${event.candidate.address}`);
                 this.emit('ice-candidate', {
                     type: 'ice-candidate',
                     candidate: event.candidate.toJSON(),
                 });
+            }
+            else {
+                console.log('[tailcom:webrtc] ICE gathering complete (null candidate)');
             }
         };
         pc.onconnectionstatechange = () => {
