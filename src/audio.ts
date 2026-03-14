@@ -56,7 +56,7 @@ export function startMicCapture(
   isMuted: () => boolean = () => false,
   onLevel?: (rms: number) => void,
 ): () => void {
-  const recorderBin = process.platform === 'win32' ? 'sox' : 'arecord'
+  const recorderBin = process.platform === 'win32' ? 'rec' : 'arecord'
   console.log(`[tailcom:audio] startMicCapture — recorder=${recorderBin} rate=${SAMPLE_RATE} ch=${CHANNELS}`)
 
   const recorder = record.record({

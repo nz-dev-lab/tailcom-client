@@ -26,7 +26,7 @@ function computeRms(samples) {
 // Uses arecord on Linux, sox on Windows.
 // Returns a stop function.
 function startMicCapture(source, isMuted = () => false, onLevel) {
-    const recorderBin = process.platform === 'win32' ? 'sox' : 'arecord';
+    const recorderBin = process.platform === 'win32' ? 'rec' : 'arecord';
     console.log(`[tailcom:audio] startMicCapture — recorder=${recorderBin} rate=${SAMPLE_RATE} ch=${CHANNELS}`);
     const recorder = record.record({
         sampleRate: SAMPLE_RATE,
