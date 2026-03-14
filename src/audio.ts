@@ -37,6 +37,16 @@ export interface AudioSink {
   }) => void) | null
 }
 
+// ── RMS helper ────────────────────────────────────────────────────────────────
+function computeRms(samples: Int16Array): number {
+  let sum = 0
+  for (let i = 0; i < samples.length; i++) {
+    const v = samples[i] / 32768
+    sum += v * v
+  }
+  return Math.sqrt(sum / samples.length)
+}
+
 // ── Mic capture ───────────────────────────────────────────────────────────────
 // Uses arecord on Linux, sox on Windows.
 // Returns a stop function.
@@ -44,31 +54,39 @@ export interface AudioSink {
 export function startMicCapture(
   source: AudioSource,
   isMuted: () => boolean = () => false,
+  onLevel?: (rms: number) => void,
 ): () => void {
+  const recorderBin = process.platform === 'win32' ? 'sox' : 'arecord'
+  console.log(`[tailcom:audio] startMicCapture — recorder=${recorderBin} rate=${SAMPLE_RATE} ch=${CHANNELS}`)
+
   const recorder = record.record({
     sampleRate: SAMPLE_RATE,
     channels: CHANNELS,
     audioType: 'raw',
-    recorder: process.platform === 'win32' ? 'sox' : 'arecord',
+    recorder: recorderBin,
     verbose: false,
     silence: 0,
   })
 
   let overflow = Buffer.alloc(0)
+  let frameCount = 0
 
   const stream = recorder.stream()
   stream.on('data', (chunk: Buffer) => {
+    frameCount++
+    if (frameCount === 1) console.log('[tailcom:audio] mic stream receiving data — first frame OK')
+    if (frameCount === 100) console.log('[tailcom:audio] mic stream healthy — 100 frames captured')
     overflow = Buffer.concat([overflow, chunk])
     while (overflow.length >= BYTES_PER_FRAME) {
       const frame = overflow.slice(0, BYTES_PER_FRAME)
       overflow = overflow.slice(BYTES_PER_FRAME)
 
+      const samples = new Int16Array(FRAME_SAMPLES)
+      for (let i = 0; i < FRAME_SAMPLES; i++) {
+        samples[i] = frame.readInt16LE(i * 2)
+      }
+
       if (!isMuted()) {
-        // Create a copy so the Int16Array owns its memory
-        const samples = new Int16Array(FRAME_SAMPLES)
-        for (let i = 0; i < FRAME_SAMPLES; i++) {
-          samples[i] = frame.readInt16LE(i * 2)
-        }
         source.onData({
           samples,
           sampleRate: SAMPLE_RATE,
@@ -77,12 +95,20 @@ export function startMicCapture(
           numberOfFrames: FRAME_SAMPLES,
         })
       }
+
+      // Level metering — every 10 frames ≈ 100 ms (independent of mute)
+      if (onLevel && frameCount % 10 === 0) {
+        onLevel(computeRms(samples))
+      }
     }
   })
 
-  stream.on('error', () => { /* mic errors are non-fatal */ })
+  stream.on('error', (err: Error) => {
+    console.error('[tailcom:audio] mic stream error:', err.message)
+  })
 
   return () => {
+    console.log('[tailcom:audio] stopMicCapture called')
     try { recorder.stop() } catch { /* ignore */ }
   }
 }
@@ -91,7 +117,7 @@ export function startMicCapture(
 // Pipes raw PCM to aplay (Linux) or sox (Windows) via stdin.
 // Returns a stop function.
 
-export function startSpeakerPlayback(sink: AudioSink): () => void {
+export function startSpeakerPlayback(sink: AudioSink, onLevel?: (rms: number) => void): () => void {
   let player: ChildProcess | null = null
 
   if (process.platform === 'win32') {
@@ -116,8 +142,16 @@ export function startSpeakerPlayback(sink: AudioSink): () => void {
     ], { stdio: ['pipe', 'ignore', 'ignore'] })
   }
 
-  player.on('error', () => { /* playback errors are non-fatal */ })
+  const playerBin = process.platform === 'win32' ? 'sox' : 'aplay'
+  console.log(`[tailcom:audio] startSpeakerPlayback — player=${playerBin}`)
+  player.on('error', (err: Error) => {
+    console.error('[tailcom:audio] speaker player error:', err.message)
+  })
+  player.on('exit', (code: number | null) => {
+    if (code !== null && code !== 0) console.error(`[tailcom:audio] speaker player exited with code ${code}`)
+  })
 
+  let speakerFrameCount = 0
   sink.ondata = (data) => {
     if (!player?.stdin?.writable) return
     const buf = Buffer.from(
@@ -126,6 +160,12 @@ export function startSpeakerPlayback(sink: AudioSink): () => void {
       data.samples.byteLength,
     )
     player.stdin.write(buf)
+
+    // Level metering — every 10 frames ≈ 100 ms
+    speakerFrameCount++
+    if (onLevel && speakerFrameCount % 10 === 0) {
+      onLevel(computeRms(data.samples))
+    }
   }
 
   return () => {

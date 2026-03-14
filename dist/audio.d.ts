@@ -16,6 +16,6 @@ export interface AudioSink {
         numberOfFrames: number;
     }) => void) | null;
 }
-export declare function startMicCapture(source: AudioSource, isMuted?: () => boolean): () => void;
-export declare function startSpeakerPlayback(sink: AudioSink): () => void;
+export declare function startMicCapture(source: AudioSource, isMuted?: () => boolean, onLevel?: (rms: number) => void): () => void;
+export declare function startSpeakerPlayback(sink: AudioSink, onLevel?: (rms: number) => void): () => void;
 //# sourceMappingURL=audio.d.ts.map

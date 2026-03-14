@@ -43,10 +43,14 @@ export class WebRTCHandler extends EventEmitter {
     }
 
     pc.onconnectionstatechange = () => {
+      console.log(`[tailcom:webrtc] connectionState → ${pc.connectionState}`)
       if (pc.connectionState === 'connected') {
+        console.log('[tailcom:webrtc] peer connected — starting mic capture')
         // Start real mic capture — push samples into wrtc source
         this.stopMic = startMicCapture(
           { onData: (d) => micSource.onData(d) },
+          undefined,
+          (rms) => this.emit('local-level', rms),
         )
         this.emit('connected')
       } else if (
@@ -54,12 +58,22 @@ export class WebRTCHandler extends EventEmitter {
         pc.connectionState === 'failed' ||
         pc.connectionState === 'closed'
       ) {
+        console.log(`[tailcom:webrtc] peer ${pc.connectionState} — tearing down`)
         this.emit('disconnected')
       }
     }
 
+    pc.onicegatheringstatechange = () => {
+      console.log(`[tailcom:webrtc] iceGatheringState → ${pc.iceGatheringState}`)
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[tailcom:webrtc] iceConnectionState → ${pc.iceConnectionState}`)
+    }
+
     pc.ontrack = (event: RTCTrackEvent) => {
       const track = event.track
+      console.log(`[tailcom:webrtc] ontrack — kind=${track.kind}`)
       if (track.kind !== 'audio') return
 
       // Attach sink to receive incoming audio from dashboard
@@ -69,6 +83,7 @@ export class WebRTCHandler extends EventEmitter {
       // Play incoming audio through system speakers
       this.stopSpeaker = startSpeakerPlayback(
         sink as { ondata: ((data: unknown) => void) | null },
+        (rms) => this.emit('remote-level', rms),
       )
     }
 

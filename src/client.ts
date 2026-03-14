@@ -196,6 +196,9 @@ export class TailcomClient extends EventEmitter {
         this.emit('call-started')
       })
 
+      handler.on('local-level',  (rms: number) => this.emit('local-level', rms))
+      handler.on('remote-level', (rms: number) => this.emit('remote-level', rms))
+
       handler.on('disconnected', () => {
         this.teardownCall()
       })

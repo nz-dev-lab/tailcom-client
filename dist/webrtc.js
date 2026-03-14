@@ -28,26 +28,36 @@ class WebRTCHandler extends events_1.EventEmitter {
             }
         };
         pc.onconnectionstatechange = () => {
+            console.log(`[tailcom:webrtc] connectionState → ${pc.connectionState}`);
             if (pc.connectionState === 'connected') {
+                console.log('[tailcom:webrtc] peer connected — starting mic capture');
                 // Start real mic capture — push samples into wrtc source
-                this.stopMic = (0, audio_1.startMicCapture)({ onData: (d) => micSource.onData(d) });
+                this.stopMic = (0, audio_1.startMicCapture)({ onData: (d) => micSource.onData(d) }, undefined, (rms) => this.emit('local-level', rms));
                 this.emit('connected');
             }
             else if (pc.connectionState === 'disconnected' ||
                 pc.connectionState === 'failed' ||
                 pc.connectionState === 'closed') {
+                console.log(`[tailcom:webrtc] peer ${pc.connectionState} — tearing down`);
                 this.emit('disconnected');
             }
         };
+        pc.onicegatheringstatechange = () => {
+            console.log(`[tailcom:webrtc] iceGatheringState → ${pc.iceGatheringState}`);
+        };
+        pc.oniceconnectionstatechange = () => {
+            console.log(`[tailcom:webrtc] iceConnectionState → ${pc.iceConnectionState}`);
+        };
         pc.ontrack = (event) => {
             const track = event.track;
+            console.log(`[tailcom:webrtc] ontrack — kind=${track.kind}`);
             if (track.kind !== 'audio')
                 return;
             // Attach sink to receive incoming audio from dashboard
             const sink = new wrtc.nonstandard.RTCAudioSink(track);
             this.audioSink = sink;
             // Play incoming audio through system speakers
-            this.stopSpeaker = (0, audio_1.startSpeakerPlayback)(sink);
+            this.stopSpeaker = (0, audio_1.startSpeakerPlayback)(sink, (rms) => this.emit('remote-level', rms));
         };
         this.pc = pc;
         return pc;
