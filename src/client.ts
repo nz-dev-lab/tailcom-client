@@ -91,8 +91,10 @@ export class TailcomClient extends EventEmitter {
   // ── Connection handling ────────────────────────────────────────────────────
 
   private handleConnection(ws: WebSocket): void {
+    console.log('[tailcom:client] WebSocket connection received')
     // Only one connection at a time — reject extras
     if (this.activeSocket) {
+      console.log('[tailcom:client] rejecting — already have an active socket')
       ws.close(1008, 'busy')
       return
     }
@@ -132,6 +134,7 @@ export class TailcomClient extends EventEmitter {
         break
 
       case 'offer':
+        console.log(`[tailcom:client] offer received — autoAccept=${this.autoAccept}`)
         if (this.autoAccept) {
           void this.handleOffer(ws, msg.sdp)
         } else {
@@ -181,6 +184,7 @@ export class TailcomClient extends EventEmitter {
     if (this.inCall) return
 
     try {
+      console.log('[tailcom:client] handleOffer — creating WebRTCHandler')
       const handler = new WebRTCHandler()
       this.webrtc = handler
 
@@ -208,8 +212,11 @@ export class TailcomClient extends EventEmitter {
         this.teardownCall()
       })
 
+      console.log('[tailcom:client] calling createPeerConnection')
       handler.createPeerConnection()
+      console.log('[tailcom:client] createPeerConnection returned — creating answer')
       const answer = await handler.createAnswer(offer)
+      console.log('[tailcom:client] answer created')
       this.send(ws, { type: 'answer', sdp: answer })
     } catch (err) {
       this.emit('error', err instanceof Error ? err : new Error(String(err)))

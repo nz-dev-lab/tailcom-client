@@ -106,8 +106,10 @@ class TailcomClient extends events_1.EventEmitter {
     }
     // ── Connection handling ────────────────────────────────────────────────────
     handleConnection(ws) {
+        console.log('[tailcom:client] WebSocket connection received');
         // Only one connection at a time — reject extras
         if (this.activeSocket) {
+            console.log('[tailcom:client] rejecting — already have an active socket');
             ws.close(1008, 'busy');
             return;
         }
@@ -141,6 +143,7 @@ class TailcomClient extends events_1.EventEmitter {
                 this.send(ws, { type: 'pong' });
                 break;
             case 'offer':
+                console.log(`[tailcom:client] offer received — autoAccept=${this.autoAccept}`);
                 if (this.autoAccept) {
                     void this.handleOffer(ws, msg.sdp);
                 }
@@ -180,6 +183,7 @@ class TailcomClient extends events_1.EventEmitter {
         if (this.inCall)
             return;
         try {
+            console.log('[tailcom:client] handleOffer — creating WebRTCHandler');
             const handler = new webrtc_1.WebRTCHandler();
             this.webrtc = handler;
             // Forward ICE candidates to dashboard
@@ -201,8 +205,11 @@ class TailcomClient extends events_1.EventEmitter {
                 this.emit('error', err);
                 this.teardownCall();
             });
+            console.log('[tailcom:client] calling createPeerConnection');
             handler.createPeerConnection();
+            console.log('[tailcom:client] createPeerConnection returned — creating answer');
             const answer = await handler.createAnswer(offer);
+            console.log('[tailcom:client] answer created');
             this.send(ws, { type: 'answer', sdp: answer });
         }
         catch (err) {

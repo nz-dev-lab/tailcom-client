@@ -27,11 +27,17 @@ export class WebRTCHandler extends EventEmitter {
   private stopSpeaker: (() => void) | null = null
 
   createPeerConnection(): RTCPeerConnection {
+    console.log('[tailcom:webrtc] new RTCPeerConnection...')
     const pc = new wrtc.RTCPeerConnection({ iceServers: [] })
+    console.log('[tailcom:webrtc] RTCPeerConnection OK')
 
     // Add a mic track so the remote side receives audio from us
+    console.log('[tailcom:webrtc] new RTCAudioSource...')
     const micSource = new wrtc.nonstandard.RTCAudioSource()
+    console.log('[tailcom:webrtc] RTCAudioSource OK')
+    console.log('[tailcom:webrtc] addTrack...')
     pc.addTrack(micSource.createTrack())
+    console.log('[tailcom:webrtc] addTrack OK')
 
     pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
