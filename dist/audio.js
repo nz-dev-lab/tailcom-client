@@ -142,6 +142,8 @@ function startSpeakerPlayback(sink, onLevel) {
     });
     let speakerFrameCount = 0;
     sink.ondata = (data) => {
+        if (speakerFrameCount === 0)
+            console.log('[tailcom:audio] speaker receiving audio — first frame from dashboard');
         if (!player?.stdin?.writable)
             return;
         const buf = Buffer.from(data.samples.buffer, data.samples.byteOffset, data.samples.byteLength);
